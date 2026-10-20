@@ -14,7 +14,7 @@ async function showDiagnostic() {
     } else if (!result.enabled || result.terms === 0) {
       diagnostic.textContent = `${result.detected} posts detected. Add a word and enable filtering.`;
     } else {
-      diagnostic.textContent = `${result.detected} posts detected; ${result.hidden} hidden.`;
+      diagnostic.textContent = `${result.detected} posts detected; ${result.collapsed} collapsed.`;
     }
   } catch {
     diagnostic.textContent = "Not connected to this tab. Open LinkedIn, allow extension access, and refresh it.";

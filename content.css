@@ -1,3 +1,51 @@
-.linkedin-word-filter-hidden {
+.linkedin-word-filter-collapsed {
+  height: auto !important;
+  min-height: 0 !important;
+}
+
+.linkedin-word-filter-collapsed > :not(.linkedin-word-filter-placeholder) {
   display: none !important;
+}
+
+.linkedin-word-filter-placeholder {
+  align-items: center;
+  background: #eef3f8;
+  border: 1px solid #c6d5e4;
+  border-radius: 8px;
+  color: #273849;
+  display: none;
+  font: 13px system-ui, sans-serif;
+  gap: 12px;
+  justify-content: space-between;
+  min-height: 38px;
+  padding: 6px 12px;
+}
+
+.linkedin-word-filter-filtered > .linkedin-word-filter-placeholder {
+  display: flex !important;
+}
+
+.linkedin-word-filter-placeholder button {
+  background: transparent;
+  border: 0;
+  color: #0a66c2;
+  cursor: pointer;
+  flex: none;
+  font: inherit;
+  font-weight: 600;
+  padding: 4px;
+}
+
+.linkedin-word-filter-placeholder button:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 2px;
+}
+
+@media (prefers-color-scheme: dark) {
+  .linkedin-word-filter-placeholder {
+    background: #1b2228;
+    border-color: #3b4650;
+    color: #e4e9ed;
+  }
+  .linkedin-word-filter-placeholder button { color: #71b7ff; }
 }

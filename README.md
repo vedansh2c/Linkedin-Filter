@@ -1,6 +1,6 @@
 # LinkedIn Word Filter for Firefox
 
-Keep only LinkedIn feed posts containing the words or phrases you choose. Matching is case insensitive and uses word boundaries: `AI` matches “AI research” but not “paid.” Enter one term per line or separate terms with commas. A blank list shows all posts.
+Collapse LinkedIn feed posts that do not contain the words or phrases you choose. Each collapsed post becomes a compact row with **Show post** and **Collapse again** controls. Matching is case insensitive and uses word boundaries: `AI` matches “AI research” but not “paid.” Enter one term per line or separate terms with commas. A blank list shows all posts.
 
 Filtering happens entirely in Firefox. The extension sends no data anywhere and asks only for LinkedIn page access and local storage. See [PRIVACY.md](PRIVACY.md).
 
@@ -8,13 +8,13 @@ Filtering happens entirely in Firefox. The extension sends no data anywhere and 
 
 1. Install the add-on in Firefox, then open LinkedIn's feed.
 2. Click the extension button, enter words or phrases, and click **Save filters**.
-3. Turn off **Enable filtering** to restore all posts at once.
+3. Turn off **Enable filtering** to expand all posts at once.
 
 The extension checks post body text, including newly loaded posts. It does not inspect comments or messages. LinkedIn can change its page markup, so filtering may need updates. It runs only on `www.linkedin.com` feed pages.
 
 ## Troubleshooting
 
-After saving filters, the popup reports how many feed posts it detected and hid. If it says **Not connected**, check the extension's permission for `www.linkedin.com` in `about:addons`, then refresh the LinkedIn tab. If it says **No feed posts detected**, check that you are on `https://www.linkedin.com/feed/` and reload the page.
+After saving filters, the popup reports how many feed posts it detected and collapsed. If it says **Not connected**, check the extension's permission for `www.linkedin.com` in `about:addons`, then refresh the LinkedIn tab. If it says **No feed posts detected**, check that you are on `https://www.linkedin.com/feed/` and reload the page.
 
 For script errors, open Firefox Developer Tools on the LinkedIn tab (macOS: **Cmd+Option+K**; Windows/Linux: **Ctrl+Shift+K**) and select **Console**. Search for `LinkedIn Word Filter`. Popup errors appear under **Inspect** next to the extension on `about:debugging#/runtime/this-firefox`. After changing source files, click **Reload** there and refresh LinkedIn.
 
