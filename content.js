@@ -1,9 +1,7 @@
 (() => {
   "use strict";
 
-  const FILTERED = "linkedin-word-filter-filtered";
-  const COLLAPSED = "linkedin-word-filter-collapsed";
-  const PLACEHOLDER = "linkedin-word-filter-placeholder";
+  const HIDDEN = "linkedin-word-filter-hidden";
   const MODERN_CARD_SELECTOR = '[data-testid="mainFeed"] [role="listitem"]';
   const LEGACY_CARD_SELECTOR = ".occludable-update, .feed-shared-update-v2";
   const CARD_SELECTOR = [
@@ -21,8 +19,7 @@
     ".feed-shared-text"
   ].join(",");
   const REMOVED_CARD_SELECTOR = `[role="listitem"], [data-view-name="feed-full-update"], ${LEGACY_CARD_SELECTOR}, article[data-urn*="activity"], [data-id^="urn:li:activity:"], [data-urn^="urn:li:activity:"]`;
-  const EXCLUDED_TEXT_SELECTOR = `.${PLACEHOLDER}, button, [role="button"], [data-view-name*="comment"], [data-testid*="comment"]`;
-  const MAX_NEW_PER_SCROLL = 32;
+  const EXCLUDED_TEXT_SELECTOR = 'button, [role="button"], [data-view-name*="comment"], [data-testid*="comment"]';
   const FRAME_BUDGET_MS = 5;
 
   let enabled = true;
@@ -35,9 +32,7 @@
   let known = new WeakSet();
   let near = new WeakSet();
   let cache = new WeakMap();
-  let expanded = new WeakSet();
-  let remaining = MAX_NEW_PER_SCROLL;
-  let lastScrollY = window.scrollY;
+  const hidden = new Set();
   let scheduled = false;
   const ready = new Set();
   const requestFrame = window.requestAnimationFrame?.bind(window)
@@ -82,61 +77,16 @@
     return parts.join(" ");
   }
 
-  function removePlaceholder(card) {
-    card.classList.remove(FILTERED, COLLAPSED, "linkedin-word-filter-hidden");
-    for (const child of card.children) {
-      if (child.classList.contains(PLACEHOLDER)) child.remove();
-    }
-    expanded.delete(card);
-  }
-
-  function addPlaceholder(card) {
-    const existing = [...card.children].find((child) => child.classList.contains(PLACEHOLDER));
-    if (existing) {
-      const button = existing.querySelector("button");
-      const isExpanded = expanded.has(card);
-      const label = isExpanded ? "Collapse again" : "Show post";
-      if (button.textContent !== label) button.textContent = label;
-      button.setAttribute("aria-expanded", String(isExpanded));
-      return;
-    }
-
-    const row = document.createElement("div");
-    row.className = PLACEHOLDER;
-    const label = document.createElement("span");
-    label.textContent = "Post collapsed by LinkedIn Word Filter";
-    const button = document.createElement("button");
-    button.type = "button";
-    button.textContent = "Show post";
-    button.setAttribute("aria-expanded", "false");
-    button.addEventListener("click", () => {
-      if (expanded.has(card)) {
-        expanded.delete(card);
-        card.classList.add(COLLAPSED);
-        button.textContent = "Show post";
-        button.setAttribute("aria-expanded", "false");
-      } else {
-        expanded.add(card);
-        card.classList.remove(COLLAPSED);
-        button.textContent = "Collapse again";
-        button.setAttribute("aria-expanded", "true");
-      }
-    });
-    row.append(label, button);
-    card.prepend(row);
-  }
-
   function processCard(card) {
     const state = cache.get(card);
     if (!state || !card.isConnected) return;
     if (!enabled || patterns.length === 0 || !isFeedPage()
         || LinkedInWordFilterCore.matchesCompiled(postText(card), patterns)) {
-      removePlaceholder(card);
+      card.classList.remove(HIDDEN);
+      hidden.delete(card);
     } else {
-      addPlaceholder(card);
-      card.classList.add(FILTERED);
-      card.classList.toggle(COLLAPSED, !expanded.has(card));
-      card.classList.remove("linkedin-word-filter-hidden");
+      card.classList.add(HIDDEN);
+      hidden.add(card);
     }
     state.revision = revision;
     state.dirty = false;
@@ -153,9 +103,8 @@
     scheduled = false;
     if (!settingsReady || !enabled || !patterns.length || !isFeedPage()) return;
     const start = performance.now();
-    let eligible = false;
     for (const card of ready) {
-      if (!card.isConnected || !near.has(card)) {
+      if (!card.isConnected || (!near.has(card) && !hidden.has(card))) {
         ready.delete(card);
         continue;
       }
@@ -164,21 +113,11 @@
         ready.delete(card);
         continue;
       }
-      const firstPass = state.revision < 0;
-      if (firstPass && remaining === 0) continue;
       ready.delete(card);
-      if (firstPass) remaining -= 1;
       processCard(card);
       if (performance.now() - start >= FRAME_BUDGET_MS) break;
     }
-    for (const card of ready) {
-      const state = cache.get(card);
-      if (state && (state.revision >= 0 || remaining > 0)) {
-        eligible = true;
-        break;
-      }
-    }
-    if (eligible) schedule();
+    if (ready.size) schedule();
   }
 
   const intersection = typeof IntersectionObserver === "function"
@@ -195,7 +134,7 @@
         }
       }
       schedule();
-    }, { rootMargin: "0px 0px 700px 0px" })
+    }, { rootMargin: "0px 0px 200px 0px" })
     : null;
 
   function discoverCard(node) {
@@ -213,7 +152,7 @@
 
   function markChanged(node) {
     const element = node.nodeType === Node.ELEMENT_NODE ? node : node.parentElement;
-    if (!element || element.closest(`.${PLACEHOLDER}`)) return;
+    if (!element) return;
     const found = element.closest(CARD_SELECTOR);
     if (!found) return;
     const card = canonicalCard(found);
@@ -223,7 +162,7 @@
     }
     const state = cache.get(card);
     state.dirty = true;
-    if (near.has(card)) {
+    if (near.has(card) || hidden.has(card)) {
       ready.add(card);
       schedule();
     }
@@ -240,6 +179,7 @@
       intersection?.unobserve(card);
       known.delete(card);
       near.delete(card);
+      hidden.delete(card);
       cache.delete(card);
       ready.delete(card);
     }
@@ -251,10 +191,6 @@
         markChanged(mutation.target);
         continue;
       }
-      if (mutation.target.nodeType === Node.ELEMENT_NODE
-          && mutation.target.closest(`.${PLACEHOLDER}`)) continue;
-      if ([...mutation.addedNodes, ...mutation.removedNodes].every((node) =>
-        node.nodeType === Node.ELEMENT_NODE && node.classList.contains(PLACEHOLDER))) continue;
       markChanged(mutation.target);
       for (const node of mutation.addedNodes) {
         if (node.nodeType !== Node.ELEMENT_NODE) continue;
@@ -276,7 +212,7 @@
     near = new WeakSet();
     cache = new WeakMap();
     ready.clear();
-    remaining = MAX_NEW_PER_SCROLL;
+    hidden.clear();
     feedObserver = new MutationObserver(onFeedMutations);
     feedObserver.observe(root, { childList: true, characterData: true, subtree: true });
     for (const card of cards(root)) discoverCard(card);
@@ -288,7 +224,6 @@
       enabled = values.enabled !== false;
       terms = LinkedInWordFilterCore.parseTerms(values.words);
       patterns = LinkedInWordFilterCore.compileTerms(terms);
-      expanded = new WeakSet();
       revision += 1;
     } catch (error) {
       console.error("LinkedIn Word Filter: could not read settings", error);
@@ -297,12 +232,12 @@
     settingsReady = true;
     if (!enabled || patterns.length === 0) {
       ready.clear();
-      for (const card of document.querySelectorAll(`.${FILTERED}`)) removePlaceholder(card);
+      for (const card of document.querySelectorAll(`.${HIDDEN}`)) card.classList.remove(HIDDEN);
+      hidden.clear();
       return;
     }
-    remaining = MAX_NEW_PER_SCROLL;
     for (const card of cards(feedRoot || document)) {
-      if (near.has(card)) ready.add(card);
+      if (near.has(card) || hidden.has(card)) ready.add(card);
     }
     schedule();
   }
@@ -316,15 +251,9 @@
     return Promise.resolve({
       feed: isFeedPage(), enabled, terms: terms.length,
       detected: currentCards.length,
-      collapsed: currentCards.filter((card) => card.classList.contains(COLLAPSED)).length
+      hidden: currentCards.filter((card) => card.classList.contains(HIDDEN)).length
     });
   });
-  window.addEventListener("scroll", () => {
-    if (Math.abs(window.scrollY - lastScrollY) < 160) return;
-    lastScrollY = window.scrollY;
-    remaining = MAX_NEW_PER_SCROLL;
-    schedule();
-  }, { passive: true });
   new MutationObserver((mutations) => {
     if (!feedRoot?.isConnected) {
       bindFeed();

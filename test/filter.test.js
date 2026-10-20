@@ -49,29 +49,25 @@ function fixture(url = "https://www.linkedin.com/feed/", markup = `<main>
   };
 }
 
-function collapsed(window, id) {
-  return window.document.getElementById(id).classList.contains("linkedin-word-filter-collapsed");
+function hidden(window, id) {
+  return window.document.getElementById(id).classList.contains("linkedin-word-filter-hidden");
 }
 
 test("filters post body, updates dynamically, and restores posts when disabled", async () => {
   const app = fixture();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "keep"), false);
-  assert.equal(collapsed(app.window, "hide"), true);
-  assert.equal(app.window.document.querySelectorAll(".linkedin-word-filter-placeholder").length, 1);
-
-  const show = app.window.document.querySelector("#hide .linkedin-word-filter-placeholder button");
-  show.click();
-  assert.equal(collapsed(app.window, "hide"), false);
-  assert.equal(show.textContent, "Collapse again");
+  assert.equal(hidden(app.window, "keep"), false);
+  assert.equal(hidden(app.window, "hide"), true);
+  assert.equal(app.window.document.querySelectorAll(".linkedin-word-filter-placeholder").length, 0);
+  app.window.document.querySelector("#hide .update-components-text").textContent = "AI coffee break";
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(hidden(app.window, "hide"), false);
+  app.window.document.querySelector("#hide .update-components-text").textContent = "Coffee break";
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(hidden(app.window, "hide"), true);
   app.change({ words: "AI, climate" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "hide"), true);
-  assert.equal(show.textContent, "Show post");
-  show.click();
-  assert.equal(collapsed(app.window, "hide"), false);
-  show.click();
-  assert.equal(collapsed(app.window, "hide"), true);
+  assert.equal(hidden(app.window, "hide"), true);
 
   const next = app.window.document.createElement("div");
   next.id = "new";
@@ -79,21 +75,21 @@ test("filters post body, updates dynamically, and restores posts when disabled",
   next.innerHTML = '<span class="update-components-text">AI hiring</span>';
   app.window.document.querySelector("main").append(next);
   await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.equal(collapsed(app.window, "new"), false);
+  assert.equal(hidden(app.window, "new"), false);
 
   app.change({ enabled: false });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "hide"), false);
+  assert.equal(hidden(app.window, "hide"), false);
   assert.equal(app.window.document.querySelectorAll(".linkedin-word-filter-placeholder").length, 0);
 
   app.change({ enabled: true, words: "Coffee" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "keep"), true);
-  assert.equal(collapsed(app.window, "hide"), false);
+  assert.equal(hidden(app.window, "keep"), true);
+  assert.equal(hidden(app.window, "hide"), false);
 
   app.change({ words: "" });
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "keep"), false);
+  assert.equal(hidden(app.window, "keep"), false);
   app.window.close();
 });
 
@@ -104,10 +100,10 @@ test("detects modern LinkedIn feed cards and ignores comment paragraphs", async 
       <div data-view-name="feed-comment"><p>AI</p></div></div></div>
   </main>`);
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "keep"), false);
-  assert.equal(collapsed(app.window, "hide"), true);
+  assert.equal(hidden(app.window, "keep"), false);
+  assert.equal(hidden(app.window, "hide"), true);
   assert.deepEqual(JSON.parse(JSON.stringify(await app.status())), {
-    feed: true, enabled: true, terms: 1, detected: 2, collapsed: 1
+    feed: true, enabled: true, terms: 1, detected: 2, hidden: 1
   });
   app.window.close();
 });
@@ -115,7 +111,7 @@ test("detects modern LinkedIn feed cards and ignores comment paragraphs", async 
 test("does not filter non-feed LinkedIn pages", async () => {
   const app = fixture("https://www.linkedin.com/in/example/");
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(collapsed(app.window, "hide"), false);
+  assert.equal(hidden(app.window, "hide"), false);
   app.window.close();
 });
 
@@ -131,12 +127,12 @@ test("popup reports feed connection and saves settings", async () => {
     } },
     tabs: {
       query: async () => [{ id: 7 }],
-      sendMessage: async () => ({ feed: true, enabled: true, terms: 1, detected: 3, collapsed: 2 })
+      sendMessage: async () => ({ feed: true, enabled: true, terms: 1, detected: 3, hidden: 2 })
     }
   };
   window.eval(fs.readFileSync(path.join(__dirname, "../popup.js"), "utf8"));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.match(window.document.getElementById("diagnostic").textContent, /3 posts loaded; 2 collapsed so far/);
+  assert.match(window.document.getElementById("diagnostic").textContent, /3 posts loaded; 2 hidden so far/);
   window.document.getElementById("words").value = "climate tech";
   window.document.getElementById("save").click();
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -144,7 +140,7 @@ test("popup reports feed connection and saves settings", async () => {
   dom.window.close();
 });
 
-test("large feeds process a bounded batch, then continue on scroll", async () => {
+test("large feeds check each post as it approaches the viewport without a fixed cap", async () => {
   const posts = Array.from({ length: 200 }, (_, i) =>
     `<div role="listitem" id="post-${i}"><div data-view-name="feed-full-update"><p>Post ${i}</p></div></div>`
   ).join("");
@@ -158,7 +154,7 @@ test("large feeds process a bounded batch, then continue on scroll", async () =>
     observe(target) { this.targets.push(target); }
     unobserve(target) { this.targets = this.targets.filter((candidate) => candidate !== target); }
     disconnect() { this.targets = []; }
-    enterAll() { this.callback(this.targets.map((target) => ({ target, isIntersecting: true }))); }
+    enter(targets) { this.callback(targets.map((target) => ({ target, isIntersecting: true }))); }
   }
   window.IntersectionObserver = FakeIntersectionObserver;
   window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
@@ -177,20 +173,21 @@ test("large feeds process a bounded batch, then continue on scroll", async () =>
     return original(...args);
   };
   window.eval(fs.readFileSync(path.join(__dirname, "../content.js"), "utf8"));
-  intersection.enterAll();
+  intersection.enter(intersection.targets.slice(0, 3));
   await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.equal(checks, 32);
-  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-collapsed").length, 32);
+  assert.equal(checks, 3);
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 3);
+  assert.equal(hidden(window, "post-40"), false);
 
   window.document.querySelector("#post-0 p").textContent = "Hiring now";
   await new Promise((resolve) => setTimeout(resolve, 30));
-  assert.equal(collapsed(window, "post-0"), false);
+  assert.equal(hidden(window, "post-0"), false);
 
-  Object.defineProperty(window, "scrollY", { value: 200, configurable: true });
-  window.dispatchEvent(new window.Event("scroll"));
+  intersection.enter(intersection.targets.slice(3, 43));
   await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-collapsed").length, 63);
-  assert.equal(checks, 65);
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 42);
+  assert.equal(checks, 44);
+  assert.equal(hidden(window, "post-42"), true);
   window.document.getElementById("post-199").remove();
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(intersection.targets.length, 199);

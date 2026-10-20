@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Word Filter",
-  "version": "1.0.3",
-  "description": "Collapse LinkedIn feed posts that lack your chosen words or phrases.",
+  "version": "1.0.4",
+  "description": "Hide LinkedIn feed posts that lack your chosen words or phrases.",
   "incognito": "not_allowed",
   "browser_specific_settings": {
     "gecko": {
