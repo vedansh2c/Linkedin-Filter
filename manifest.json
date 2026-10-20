@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "LinkedIn Word Filter",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Show LinkedIn feed posts containing your chosen words or phrases.",
   "incognito": "not_allowed",
   "browser_specific_settings": {

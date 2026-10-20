@@ -20,15 +20,17 @@ test("matching handles words, phrases, punctuation, and Unicode", () => {
   assert.equal(core.matches("A [research] role", ["[research]"]), true);
 });
 
-function fixture(url = "https://www.linkedin.com/feed/") {
-  const dom = new JSDOM(`<!doctype html><main>
+function fixture(url = "https://www.linkedin.com/feed/", markup = `<main>
     <div class="occludable-update" id="keep"><span class="update-components-text">AI research</span></div>
     <div class="occludable-update" id="hide"><span class="update-components-text">Coffee break</span></div>
-  </main>`, { url, runScripts: "outside-only" });
+  </main>`) {
+  const dom = new JSDOM(`<!doctype html>${markup}`, { url, runScripts: "outside-only" });
   const { window } = dom;
   let values = { enabled: true, words: "AI" };
   let onChange;
+  let onMessage;
   window.browser = {
+    runtime: { onMessage: { addListener: (listener) => { onMessage = listener; } } },
     storage: {
       local: { get: async () => values },
       onChanged: { addListener: (listener) => { onChange = listener; } }
@@ -38,6 +40,7 @@ function fixture(url = "https://www.linkedin.com/feed/") {
   window.eval(fs.readFileSync(path.join(__dirname, "../content.js"), "utf8"));
   return {
     window,
+    status: () => onMessage({ type: "status" }),
     change(next) {
       values = { ...values, ...next };
       onChange({ words: { newValue: values.words }, enabled: { newValue: values.enabled } }, "local");
@@ -78,9 +81,49 @@ test("filters post body, updates dynamically, and restores posts when disabled",
   app.window.close();
 });
 
+test("detects modern LinkedIn feed cards and ignores comment paragraphs", async () => {
+  const app = fixture("https://www.linkedin.com/feed/", `<main data-testid="mainFeed">
+    <div role="listitem" id="keep"><div data-view-name="feed-full-update"><p>AI research</p></div></div>
+    <div role="listitem" id="hide"><div data-view-name="feed-full-update"><p>Coffee break</p>
+      <div data-view-name="feed-comment"><p>AI</p></div></div></div>
+  </main>`);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(hidden(app.window, "keep"), false);
+  assert.equal(hidden(app.window, "hide"), true);
+  assert.deepEqual(JSON.parse(JSON.stringify(await app.status())), {
+    feed: true, enabled: true, terms: 1, detected: 2, hidden: 1
+  });
+  app.window.close();
+});
+
 test("does not filter non-feed LinkedIn pages", async () => {
   const app = fixture("https://www.linkedin.com/in/example/");
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(hidden(app.window, "hide"), false);
   app.window.close();
+});
+
+test("popup reports feed connection and saves settings", async () => {
+  const html = fs.readFileSync(path.join(__dirname, "../popup.html"), "utf8");
+  const dom = new JSDOM(html, { url: "https://example.test/", runScripts: "outside-only" });
+  const { window } = dom;
+  let saved;
+  window.browser = {
+    storage: { local: {
+      get: async () => ({ enabled: true, words: "AI" }),
+      set: async (values) => { saved = values; }
+    } },
+    tabs: {
+      query: async () => [{ id: 7 }],
+      sendMessage: async () => ({ feed: true, enabled: true, terms: 1, detected: 3, hidden: 2 })
+    }
+  };
+  window.eval(fs.readFileSync(path.join(__dirname, "../popup.js"), "utf8"));
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.match(window.document.getElementById("diagnostic").textContent, /3 posts detected; 2 hidden/);
+  window.document.getElementById("words").value = "climate tech";
+  window.document.getElementById("save").click();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.deepEqual(JSON.parse(JSON.stringify(saved)), { enabled: true, words: "climate tech" });
+  dom.window.close();
 });
