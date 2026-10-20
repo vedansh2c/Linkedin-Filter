@@ -1,3 +1,35 @@
 .linkedin-word-filter-hidden {
   display: none !important;
 }
+
+.linkedin-word-filter-reveal {
+  animation: linkedin-word-filter-appear 140ms ease-out both;
+}
+
+@keyframes linkedin-word-filter-appear {
+  from { opacity: 0.25; }
+  to { opacity: 1; }
+}
+
+.linkedin-word-filter-progress {
+  position: fixed;
+  z-index: 1000;
+  top: 176px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 5px 12px;
+  border-radius: 999px;
+  background: #26333d;
+  color: #fff;
+  font: 12px system-ui, sans-serif;
+  pointer-events: none;
+  box-shadow: 0 2px 8px #0003;
+}
+
+.linkedin-word-filter-progress[hidden] {
+  display: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .linkedin-word-filter-reveal { animation: none; }
+}

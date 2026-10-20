@@ -58,6 +58,7 @@ test("filters post body, updates dynamically, and restores posts when disabled",
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(hidden(app.window, "keep"), false);
   assert.equal(hidden(app.window, "hide"), true);
+  assert.equal(app.window.document.getElementById("keep").classList.contains("linkedin-word-filter-reveal"), true);
   assert.equal(app.window.document.querySelectorAll(".linkedin-word-filter-placeholder").length, 0);
   app.window.document.querySelector("#hide .update-components-text").textContent = "AI coffee break";
   await new Promise((resolve) => setTimeout(resolve, 20));
@@ -91,6 +92,40 @@ test("filters post body, updates dynamically, and restores posts when disabled",
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.equal(hidden(app.window, "keep"), false);
   app.window.close();
+});
+
+test("batch removal preserves the visible matching post", async () => {
+  const dom = new JSDOM(`<!doctype html><main data-testid="mainFeed">
+    <div role="listitem" id="hide"><p>Coffee break</p></div>
+    <div role="listitem" id="keep"><p>AI research</p></div>
+  </main>`, { url: "https://www.linkedin.com/feed/", runScripts: "outside-only" });
+  const { window } = dom;
+  let intersection;
+  class FakeIntersectionObserver {
+    constructor(callback) { this.callback = callback; intersection = this; }
+    observe() {}
+    disconnect() {}
+    enter(targets) { this.callback(targets.map((target) => ({ target, isIntersecting: true }))); }
+  }
+  window.IntersectionObserver = FakeIntersectionObserver;
+  window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
+  window.browser = {
+    runtime: { onMessage: { addListener() {} } },
+    storage: { local: { get: async () => ({ enabled: true, words: "AI" }) }, onChanged: { addListener() {} } }
+  };
+  const keep = window.document.getElementById("keep");
+  keep.getBoundingClientRect = () => ({ top: hidden(window, "hide") ? 50 : 100, height: 100 });
+  const scrolls = [];
+  window.scrollBy = (_, distance) => { scrolls.push(distance); };
+  window.eval(fs.readFileSync(path.join(__dirname, "../filter-core.js"), "utf8"));
+  window.eval(fs.readFileSync(path.join(__dirname, "../content.js"), "utf8"));
+  intersection.enter([window.document.getElementById("hide"), keep]);
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(hidden(window, "hide"), true);
+  assert.equal(hidden(window, "keep"), false);
+  assert.deepEqual(scrolls, [-50]);
+  assert.match(fs.readFileSync(path.join(__dirname, "../content.css"), "utf8"), /prefers-reduced-motion: reduce/);
+  window.close();
 });
 
 test("detects modern LinkedIn feed cards and ignores comment paragraphs", async () => {
@@ -140,7 +175,7 @@ test("popup reports feed connection and saves settings", async () => {
   dom.window.close();
 });
 
-test("large feeds check each post as it approaches the viewport without a fixed cap", async () => {
+test("large feeds scan ahead and keep filtering beyond the old limit", async () => {
   const posts = Array.from({ length: 200 }, (_, i) =>
     `<div role="listitem" id="post-${i}"><div data-view-name="feed-full-update"><p>Post ${i}</p></div></div>`
   ).join("");
@@ -173,23 +208,35 @@ test("large feeds check each post as it approaches the viewport without a fixed 
     return original(...args);
   };
   window.eval(fs.readFileSync(path.join(__dirname, "../content.js"), "utf8"));
+  await new Promise((resolve) => setTimeout(resolve, 0));
   intersection.enter(intersection.targets.slice(0, 3));
+  assert.equal(window.document.querySelector(".linkedin-word-filter-progress").hidden, false);
   await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.equal(checks, 3);
-  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 3);
+  assert.equal(checks, 26);
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 26);
   assert.equal(hidden(window, "post-40"), false);
+  assert.equal(window.document.querySelector(".linkedin-word-filter-progress").hidden, true);
 
   window.document.querySelector("#post-0 p").textContent = "Hiring now";
   await new Promise((resolve) => setTimeout(resolve, 30));
   assert.equal(hidden(window, "post-0"), false);
+  assert.equal(window.document.getElementById("post-0").classList.contains("linkedin-word-filter-reveal"), false);
 
   intersection.enter(intersection.targets.slice(3, 43));
   await new Promise((resolve) => setTimeout(resolve, 120));
-  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 42);
-  assert.equal(checks, 44);
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-hidden").length, 65);
+  assert.equal(checks, 67);
   assert.equal(hidden(window, "post-42"), true);
+  const inserted = window.document.createElement("div");
+  inserted.setAttribute("role", "listitem");
+  inserted.innerHTML = "<p>Another post</p>";
+  window.document.getElementById("post-150").before(inserted);
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  intersection.enter([inserted]);
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(hidden(window, "post-150"), true);
   window.document.getElementById("post-199").remove();
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.equal(intersection.targets.length, 199);
+  assert.equal(intersection.targets.length, 200);
   dom.window.close();
 });
