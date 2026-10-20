@@ -7,15 +7,23 @@ globalThis.LinkedInWordFilterCore = (() => {
       .filter(Boolean))].slice(0, 100);
   }
 
-  function matches(text, terms) {
-    const normalized = String(text || "").normalize("NFKC").toLocaleLowerCase();
-    return terms.some((term) => {
+  function compileTerms(terms) {
+    return terms.map((term) => {
       const escaped = term.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&").replace(/\s+/gu, "\\s+");
-      return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "u").test(normalized);
+      return new RegExp(`(^|[^\\p{L}\\p{N}])${escaped}(?=$|[^\\p{L}\\p{N}])`, "u");
     });
   }
 
-  return { parseTerms, matches };
+  function matchesCompiled(text, patterns) {
+    const normalized = String(text || "").normalize("NFKC").toLocaleLowerCase();
+    return patterns.some((pattern) => pattern.test(normalized));
+  }
+
+  function matches(text, terms) {
+    return matchesCompiled(text, compileTerms(terms));
+  }
+
+  return { parseTerms, compileTerms, matchesCompiled, matches };
 })();
 
 if (typeof module !== "undefined") module.exports = globalThis.LinkedInWordFilterCore;

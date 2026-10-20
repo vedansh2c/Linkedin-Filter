@@ -18,6 +18,7 @@ test("matching handles words, phrases, punctuation, and Unicode", () => {
   assert.equal(core.matches("Machine-learning roles", ["machine learning"]), false);
   assert.equal(core.matches("A café opening", ["café"]), true);
   assert.equal(core.matches("A [research] role", ["[research]"]), true);
+  assert.equal(core.matchesCompiled("Hiring AI engineers", core.compileTerms(["ai"])), true);
 });
 
 function fixture(url = "https://www.linkedin.com/feed/", markup = `<main>
@@ -135,10 +136,63 @@ test("popup reports feed connection and saves settings", async () => {
   };
   window.eval(fs.readFileSync(path.join(__dirname, "../popup.js"), "utf8"));
   await new Promise((resolve) => setTimeout(resolve, 20));
-  assert.match(window.document.getElementById("diagnostic").textContent, /3 posts detected; 2 collapsed/);
+  assert.match(window.document.getElementById("diagnostic").textContent, /3 posts loaded; 2 collapsed so far/);
   window.document.getElementById("words").value = "climate tech";
   window.document.getElementById("save").click();
   await new Promise((resolve) => setTimeout(resolve, 20));
   assert.deepEqual(JSON.parse(JSON.stringify(saved)), { enabled: true, words: "climate tech" });
+  dom.window.close();
+});
+
+test("large feeds process a bounded batch, then continue on scroll", async () => {
+  const posts = Array.from({ length: 200 }, (_, i) =>
+    `<div role="listitem" id="post-${i}"><div data-view-name="feed-full-update"><p>Post ${i}</p></div></div>`
+  ).join("");
+  const dom = new JSDOM(`<!doctype html><main data-testid="mainFeed">${posts}</main>`, {
+    url: "https://www.linkedin.com/feed/", runScripts: "outside-only"
+  });
+  const { window } = dom;
+  let intersection;
+  class FakeIntersectionObserver {
+    constructor(callback) { this.callback = callback; this.targets = []; intersection = this; }
+    observe(target) { this.targets.push(target); }
+    unobserve(target) { this.targets = this.targets.filter((candidate) => candidate !== target); }
+    disconnect() { this.targets = []; }
+    enterAll() { this.callback(this.targets.map((target) => ({ target, isIntersecting: true }))); }
+  }
+  window.IntersectionObserver = FakeIntersectionObserver;
+  window.requestAnimationFrame = (callback) => window.setTimeout(callback, 0);
+  window.browser = {
+    runtime: { onMessage: { addListener() {} } },
+    storage: {
+      local: { get: async () => ({ enabled: true, words: "hiring" }) },
+      onChanged: { addListener() {} }
+    }
+  };
+  window.eval(fs.readFileSync(path.join(__dirname, "../filter-core.js"), "utf8"));
+  let checks = 0;
+  const original = window.LinkedInWordFilterCore.matchesCompiled;
+  window.LinkedInWordFilterCore.matchesCompiled = (...args) => {
+    checks += 1;
+    return original(...args);
+  };
+  window.eval(fs.readFileSync(path.join(__dirname, "../content.js"), "utf8"));
+  intersection.enterAll();
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(checks, 32);
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-collapsed").length, 32);
+
+  window.document.querySelector("#post-0 p").textContent = "Hiring now";
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  assert.equal(collapsed(window, "post-0"), false);
+
+  Object.defineProperty(window, "scrollY", { value: 200, configurable: true });
+  window.dispatchEvent(new window.Event("scroll"));
+  await new Promise((resolve) => setTimeout(resolve, 120));
+  assert.equal(window.document.querySelectorAll(".linkedin-word-filter-collapsed").length, 63);
+  assert.equal(checks, 65);
+  window.document.getElementById("post-199").remove();
+  await new Promise((resolve) => setTimeout(resolve, 20));
+  assert.equal(intersection.targets.length, 199);
   dom.window.close();
 });

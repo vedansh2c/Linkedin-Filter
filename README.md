@@ -12,9 +12,11 @@ Filtering happens entirely in Firefox. The extension sends no data anywhere and 
 
 The extension checks post body text, including newly loaded posts. It does not inspect comments or messages. LinkedIn can change its page markup, so filtering may need updates. It runs only on `www.linkedin.com` feed pages.
 
+For smoother scrolling, it processes posts near the viewport in small batches. Posts farther down the feed remain full size until you scroll toward them; the popup's collapsed count increases as you move through the feed.
+
 ## Troubleshooting
 
-After saving filters, the popup reports how many feed posts it detected and collapsed. If it says **Not connected**, check the extension's permission for `www.linkedin.com` in `about:addons`, then refresh the LinkedIn tab. If it says **No feed posts detected**, check that you are on `https://www.linkedin.com/feed/` and reload the page.
+After saving filters, the popup reports how many feed posts LinkedIn loaded and how many the extension has collapsed so far. If it says **Not connected**, check the extension's permission for `www.linkedin.com` in `about:addons`, then refresh the LinkedIn tab. If it says **No feed posts detected**, check that you are on `https://www.linkedin.com/feed/` and reload the page.
 
 For script errors, open Firefox Developer Tools on the LinkedIn tab (macOS: **Cmd+Option+K**; Windows/Linux: **Ctrl+Shift+K**) and select **Console**. Search for `LinkedIn Word Filter`. Popup errors appear under **Inspect** next to the extension on `about:debugging#/runtime/this-firefox`. After changing source files, click **Reload** there and refresh LinkedIn.
 
