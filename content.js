@@ -2,7 +2,6 @@
   "use strict";
 
   const HIDDEN = "linkedin-word-filter-hidden";
-  const REVEAL = "linkedin-word-filter-reveal";
   const MODERN_CARD_SELECTOR = '[data-testid="mainFeed"] [role="listitem"]';
   const LEGACY_CARD_SELECTOR = ".occludable-update, .feed-shared-update-v2";
   const CARD_SELECTOR = [
@@ -78,6 +77,21 @@
     return parts.join(" ");
   }
 
+  function processCard(card) {
+    const state = cache.get(card);
+    if (!state || !card.isConnected) return;
+    if (!enabled || patterns.length === 0 || !isFeedPage()
+        || LinkedInWordFilterCore.matchesCompiled(postText(card), patterns)) {
+      card.classList.remove(HIDDEN);
+      hidden.delete(card);
+    } else {
+      card.classList.add(HIDDEN);
+      hidden.add(card);
+    }
+    state.revision = revision;
+    state.dirty = false;
+  }
+
   function schedule() {
     if (!scheduled && settingsReady && enabled && patterns.length && isFeedPage()) {
       scheduled = true;
@@ -89,7 +103,6 @@
     scheduled = false;
     if (!settingsReady || !enabled || !patterns.length || !isFeedPage()) return;
     const start = performance.now();
-    const changes = [];
     for (const card of ready) {
       if (!card.isConnected || (!near.has(card) && !hidden.has(card))) {
         ready.delete(card);
@@ -101,23 +114,8 @@
         continue;
       }
       ready.delete(card);
-      changes.push({ card, state,
-        keep: LinkedInWordFilterCore.matchesCompiled(postText(card), patterns) });
+      processCard(card);
       if (performance.now() - start >= FRAME_BUDGET_MS) break;
-    }
-    // Read post text first, then change classes together without measuring layout.
-    for (const { card, state, keep } of changes) {
-      if (keep) {
-        card.classList.remove(HIDDEN);
-        hidden.delete(card);
-        if (state.revision < 0) card.classList.add(REVEAL);
-      } else {
-        card.classList.remove(REVEAL);
-        card.classList.add(HIDDEN);
-        hidden.add(card);
-      }
-      state.revision = revision;
-      state.dirty = false;
     }
     if (ready.size) schedule();
   }
@@ -209,7 +207,6 @@
     if (!root || root === feedRoot) return;
     feedObserver?.disconnect();
     intersection?.disconnect();
-    for (const card of hidden) card.classList.remove(HIDDEN);
     feedRoot = root;
     known = new WeakSet();
     near = new WeakSet();
@@ -236,7 +233,6 @@
     if (!enabled || patterns.length === 0) {
       ready.clear();
       for (const card of document.querySelectorAll(`.${HIDDEN}`)) card.classList.remove(HIDDEN);
-      for (const card of document.querySelectorAll(`.${REVEAL}`)) card.classList.remove(REVEAL);
       hidden.clear();
       return;
     }

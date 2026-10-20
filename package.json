@@ -1,7 +1,7 @@
 {
   "name": "linkedin-word-filter",
   "private": true,
-  "version": "1.0.6",
+  "version": "1.0.4",
   "description": "A local-only LinkedIn feed filter for Firefox",
   "scripts": {
     "test": "node --test",

@@ -12,7 +12,7 @@ Filtering happens entirely in Firefox. The extension sends no data anywhere and 
 
 The extension checks post body text, including newly loaded posts. It does not inspect comments or messages. LinkedIn can change its page markup, so filtering may need updates. It runs only on `www.linkedin.com` feed pages.
 
-For smoother scrolling, it checks posts near the viewport and applies visibility changes together once per frame. Matching posts briefly fade in; reduced motion settings disable the fade. Posts farther down the feed are checked as you scroll toward them; the popup's hidden count increases as you move through the feed.
+For smoother scrolling, it processes posts near the viewport in small batches. Posts farther down the feed are checked as you scroll toward them; the popup's hidden count increases as you move through the feed.
 
 ## Troubleshooting
 
