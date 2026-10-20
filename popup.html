@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>LinkedIn Word Filter</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <main>
+    <h1>LinkedIn Word Filter</h1>
+    <label class="switch"><input id="enabled" type="checkbox"> Enable filtering</label>
+    <label for="words">Words or phrases to keep</label>
+    <textarea id="words" rows="7" placeholder="machine learning&#10;climate tech&#10;hiring"></textarea>
+    <p>Enter one per line, or separate with commas. Matching ignores case and checks post text on the LinkedIn feed. An empty list shows all posts.</p>
+    <button id="save" type="button">Save filters</button>
+    <div id="status" role="status" aria-live="polite"></div>
+    <small>Filtering stays in this browser. No data is sent by this extension.</small>
+  </main>
+  <script src="popup.js"></script>
+</body>
+</html>
